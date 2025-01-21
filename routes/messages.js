@@ -2,17 +2,20 @@ module.exports = (io) => {
     const express = require("express");
     const { db } = require("../config/firebase");
     const router = express.Router();
-  
+    const {encryptMessage} = require("../utils/encryption")
+    const { decryptMessage } = require("../utils/encryption");
     // Send Message
     router.post("/send", async (req, res) => {
       const { senderId, receiverId, message } = req.body;
   
       try {
+
+        const encryptedMessage = encryptMessage(message)
         // Save the message in Firestore
         const messageRef = await db.collection("messages").add({
           senderId,
           receiverId,
-          message,
+          message: encryptedMessage,
           timestamp: new Date(),
           status: "sent",
         });
@@ -22,7 +25,7 @@ module.exports = (io) => {
           id: messageRef.id,  
           senderId,
           receiverId,
-          message,
+          message: encryptedMessage,
           timestamp: new Date(),
           status: "sent"
         });
@@ -73,5 +76,28 @@ module.exports = (io) => {
         }
       });
 
+      router.get("/:userId", async (req, res) => {
+        const { userId } = req.params;
+      
+        try {
+          // Fetch messages for the user
+          const messagesSnapshot = await db
+            .collection("messages")
+            .where("receiverId", "==", userId)
+            .get();
+      
+          const messages = [];
+          messagesSnapshot.forEach((doc) => {
+            const messageData = doc.data();
+            // Decrypt the message
+            const decryptedMessage = decryptMessage(messageData.message);
+            messages.push({ id: doc.id, ...messageData, message: decryptedMessage });
+          });
+      
+          res.status(200).send(messages);
+        } catch (error) {
+          res.status(400).send({ error: error.message });
+        }
+      });
     return router;
   };
