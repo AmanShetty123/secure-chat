@@ -5,6 +5,7 @@ const dotenv = require("dotenv");
 const authRoutes = require("./routes/auth")
 const messageRoutes = require("./routes/messages")
 const fileRoutes = require("./routes/files")
+const videoRoutes = require("./routes/video")
 // Load environment variables
 dotenv.config();
 // Initialize Express
@@ -18,6 +19,7 @@ app.use(express.json());
 app.use("/api/auth", authRoutes)
 app.use("/api/messages", messageRoutes(io))
 app.use("/api/files", fileRoutes)
+app.use("/api/video", videoRoutes(io))
 
 // Test route
 app.get("/", (req, res) => {
@@ -28,6 +30,28 @@ app.get("/", (req, res) => {
 io.on("connection", (socket)=> {
   console.log("A user connected", socket.id);
 
+  socket.on("offer", (data) => {
+    //broadcast the offer to the receipt
+    io.to(data.receiverId).emit('offer',{
+      senderId: socket.id,
+      offer: data.offer,
+    })
+  })
+
+  socket.on("answer", (data) => {
+    //broadcast answer to the receiver
+    io.to(data.senderId).emit("answer",{
+      receiverId: socket.id,
+      answer:data.answer,
+    })
+  })
+
+  socket.on("ice-candidate", (data) => {
+    // Broadcast the ICE candidate to the other peer
+    io.to(data.targetId).emit("ice-candidate", {
+      candidate: data.candidate,
+    });
+  });
   //handle disconnection here itself
   socket.on("disconnect", () => {
     console.log("User disconnected", socket.id);
